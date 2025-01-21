@@ -4,10 +4,14 @@ from typing import Dict
 from google.cloud import language_v1, texttospeech
 from vertexai.generative_models import GenerativeModel
 import base64
+import os
+from google.cloud import storage
+import vertexai
 
 # FastAPI app instance
 app = FastAPI()
 
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "google_creds.json"
 # Project ID and language configuration
 project_id = "red-seeker-447614-t6"
 language_code = "en-AU"
@@ -17,11 +21,11 @@ class CommentaryRequest(BaseModel):
     fav_team: str
     fav_player: str
     commentary: str
+    language_code : str
 
 
 # VertexAI initialization
 def init_vertexai():
-    import vertexai
     vertexai.init(project=project_id, location="us-central1")
 
 def analyze_key_moment(fav_team: str, fav_player: str, commentary: str) -> str:    
@@ -121,7 +125,6 @@ def set_tone_by_sentiment(player:str,sentiment_score: float, summary_text: str, 
     if sentiment_score > 0.3:  # Positive sentiment
         voice.pitch = 1.0  # Increase pitch slightly for enthusiasm
         voice.speaking_rate = 1.1  # Slightly faster pace
-
     elif sentiment_score < -0.3:  # Negative sentiment
         voice.pitch = 0.9  # Slightly lower pitch for a more somber tone
         voice.speaking_rate = 0.9  # Slightly slower pace
@@ -133,10 +136,20 @@ def set_tone_by_sentiment(player:str,sentiment_score: float, summary_text: str, 
     response = client.synthesize_speech(
         request={"input": input_text, "voice": voice, "audio_config": audio_config}
     )
-    file_name = player+".mp3"
-    with open(file_name, "wb") as out:
+    file_name = f"{player}.mp3"
+    local_file_path = f"{file_name}"
+
+    # Save MP3 locally
+    with open(local_file_path, "wb") as out:
         out.write(response.audio_content)
-    return base64.b64encode(response.audio_content).decode("utf-8")    
+
+    bucket_name = "hackathonbucket" 
+    gcs_client = storage.Client()
+    bucket = gcs_client.bucket(bucket_name)
+    blob = bucket.blob(file_name)
+    blob.upload_from_filename(local_file_path)
+    blob.make_public()
+    return blob.public_url   
 
 # API endpoint to process commentary
 @app.post("/process-commentary")
@@ -154,7 +167,7 @@ def process_commentary(request: CommentaryRequest) -> Dict:
         summary = generate_summary(request.commentary, sentiment_score)
 
         # Step 4: Generate audio
-        audio = set_tone_by_sentiment(request.fav_player,sentiment_score, summary, language_code)
+        audio = set_tone_by_sentiment(request.fav_player,sentiment_score, summary, request.language_code)
 
         return {
             "key_moment": key_moment.lower(),

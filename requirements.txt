@@ -5,3 +5,4 @@ google-cloud-texttospeech
 google-cloud-vision 
 google-generativeai 
 python-dotenv
+google-cloud-storage
