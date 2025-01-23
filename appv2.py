@@ -7,6 +7,7 @@ import base64
 import os
 from google.cloud import storage
 import vertexai
+import requests
 
 # FastAPI app instance
 app = FastAPI()
@@ -23,6 +24,9 @@ class CommentaryRequest(BaseModel):
     commentary: str
     language_code : str
 
+class IdRequest(BaseModel):
+    team_id : int
+    player_id: int
 
 # VertexAI initialization
 def init_vertexai():
@@ -177,3 +181,32 @@ def process_commentary(request: CommentaryRequest) -> Dict:
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+@app.get("/team/{team_id}")
+def get_team_data(team_id : int):
+    try:
+        url = f"https://statsapi.mlb.com/api/v1/teams/{team_id}"
+        response = requests.get(url)
+        response.raise_for_status()
+        team_data = response.json()
+        return {"team_data": team_data}
+    except:
+        return {"error": "Invalid team ID"}
+    
+@app.get("/player_id/{id}")
+def get_player_data(id : int):
+    try:
+        # player_id = request.player_id
+        url = f"https://statsapi.mlb.com/api/v1/people/{id}"
+        response = requests.get(url)
+    
+        # Raise an exception for HTTP errors
+        response.raise_for_status()
+        
+        # Parse JSON response
+        player_data = response.json()
+        # hit this api 
+        return {"player_data": player_data}
+    except:
+        return {"error": "Invalid team ID"}
