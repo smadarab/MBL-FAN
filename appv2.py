@@ -8,6 +8,7 @@ import os
 from google.cloud import storage
 import vertexai
 import requests
+import json
 
 # FastAPI app instance
 app = FastAPI()
@@ -193,20 +194,33 @@ def get_team_data(team_id : int):
         return {"team_data": team_data}
     except:
         return {"error": "Invalid team ID"}
-    
+
 @app.get("/player_id/{id}")
-def get_player_data(id : int):
+def get_player_data(id: int):
     try:
-        # player_id = request.player_id
         url = f"https://statsapi.mlb.com/api/v1/people/{id}"
         response = requests.get(url)
-    
-        # Raise an exception for HTTP errors
-        response.raise_for_status()
+        response.raise_for_status()  # Raise an exception for HTTP errors
         
-        # Parse JSON response
         player_data = response.json()
-        # hit this api 
-        return {"player_data": player_data}
-    except:
-        return {"error": "Invalid team ID"}
+        data = player_data.get('people')
+        
+        if not data or not isinstance(data, list):
+            raise HTTPException(status_code=404, detail="Player data not found")
+        
+        player = data[0]
+        result = {
+            "fullname": player.get("fullName", "Unknown"),
+            "pitchHand": player.get("pitchHand", {}),
+            "batSide": player.get("batSide", {})
+        }
+        
+        return {"player_data": result} 
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"Request error: {str(e)}")
+    except KeyError as e:
+        # Handle missing keys in the JSON response
+        raise HTTPException(status_code=500, detail=f"Data parsing error: Missing key {str(e)}")
+    except Exception as e:
+        # Catch-all for other exceptions
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
