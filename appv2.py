@@ -212,7 +212,12 @@ def get_player_data(id: int):
         result = {
             "fullname": player.get("fullName", "Unknown"),
             "pitchHand": player.get("pitchHand", {}),
-            "batSide": player.get("batSide", {})
+            "batSide": player.get("batSide", {}),
+            "strikeZoneTop": player.get("strikeZoneTop", {}),
+            "strikeZoneBottom": player.get("strikeZoneBottom", {}),
+            "height": player.get("height", {}),
+            "weight": player.get("weight", {}),
+            "mlbDebutDate" : player.get("mlbDebutDate", {})
         }
         
         return {"player_data": result} 
