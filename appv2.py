@@ -25,7 +25,7 @@ class CommentaryRequest(BaseModel):
     commentary: str
     language_code : str
 
-class IdRequest(BaseModel):
+class Playerdata(BaseModel):
     team_id : int
     player_id: int
 
@@ -195,6 +195,34 @@ def get_team_data(team_id : int):
     except:
         return {"error": "Invalid team ID"}
 
+@app.get("/team_players/{id}")
+def get_team_players(id: int):
+    try:
+        # Fetch data from the external API
+        url = f"https://statsapi.mlb.com/api/v1/teams/{id}/roster?season=2024"
+        response = requests.get(url)
+        response.raise_for_status()
+        
+        # Parse the response JSON
+        data = response.json()
+        
+        # Extract the players' id and fullName
+        players = [
+            {
+                "id": player["person"]["id"],
+                "fullName": player["person"]["fullName"]
+            }
+            for player in data.get("roster", [])
+        ]
+        
+        return {"team_id": id, "players": players}
+
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching data: {e}")
+
+    except KeyError:
+        raise HTTPException(status_code=500, detail="Unexpected response structure from API")
+
 @app.get("/player_id/{id}")
 def get_player_data(id: int):
     try:
@@ -217,7 +245,9 @@ def get_player_data(id: int):
             "strikeZoneBottom": player.get("strikeZoneBottom", {}),
             "height": player.get("height", {}),
             "weight": player.get("weight", {}),
-            "mlbDebutDate" : player.get("mlbDebutDate", {})
+            "mlbDebutDate" : player.get("mlbDebutDate", {}),
+            "currentAge": player.get("currentAge", {}),
+            "birthDate": player.get("birthDate", {})
         }
         
         return {"player_data": result} 
@@ -229,3 +259,8 @@ def get_player_data(id: int):
     except Exception as e:
         # Catch-all for other exceptions
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+    
+
+@app.post("/player_image/")
+async def create_player_image(request: Playerdata):
+    pass
