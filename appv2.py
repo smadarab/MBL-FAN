@@ -254,7 +254,43 @@ def generate_image_from_commentary(commentary: str):
     except Exception as e:
         print(f"An error occurred: {e}")
 
-# API endpoint to process commentary
+
+from datetime import datetime
+
+def convert_player_data(player_data):
+    # Convert player data to the required format
+    converted_data = {
+        "fullname": player_data["player_data"]["fullname"],
+        "pitchHand": {
+            "type": player_data["player_data"]["pitchHand"]["description"]
+        },
+        "batSide": {
+            "type": player_data["player_data"]["batSide"]["description"]
+        },
+        "strikeZoneTop": {
+            "value": player_data["player_data"]["strikeZoneTop"]
+        },
+        "strikeZoneBottom": {
+            "value": player_data["player_data"]["strikeZoneBottom"]
+        },
+        "height": {
+            "value": player_data["player_data"]["height"]
+        },
+        "weight": {
+            "value": str(player_data["player_data"]["weight"]) + "lbs"  # Add lbs to weight
+        },
+        "mlbDebutDate": {
+            "date": player_data["player_data"]["mlbDebutDate"]
+        },
+        "currentAge": {
+            "value": player_data["player_data"]["currentAge"]
+        },
+        "birthDate": {
+            "date": player_data["player_data"]["birthDate"]
+        }
+    }
+    return converted_data
+
 @app.post("/process-commentary")
 def process_commentary(request: CommentaryRequest) -> Dict:
     try:
@@ -336,7 +372,7 @@ def get_player_data(id: int):
             raise HTTPException(status_code=404, detail="Player data not found")
         
         player = data[0]
-        result = {
+        PlayerData = {
             "fullname": player.get("fullName", "Unknown"),
             "pitchHand": player.get("pitchHand", {}),
             "batSide": player.get("batSide", {}),
@@ -348,8 +384,8 @@ def get_player_data(id: int):
             "currentAge": player.get("currentAge", {}),
             "birthDate": player.get("birthDate", {})
         }
-        
-        return {"player_data": result} 
+        # data = convert_player_data(PlayerData)
+        return {"player_data": PlayerData} 
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=f"Request error: {str(e)}")
     except KeyError as e:
