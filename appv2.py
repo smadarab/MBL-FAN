@@ -5,6 +5,11 @@ from google.cloud import language_v1, texttospeech
 from vertexai.generative_models import GenerativeModel
 import base64
 import os
+from google.cloud import aiplatform, storage
+import base64
+from PIL import Image
+from io import BytesIO
+import os
 from google.cloud import storage
 import vertexai
 import requests
@@ -15,8 +20,30 @@ app = FastAPI()
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "google_creds.json"
 # Project ID and language configuration
-project_id = "red-seeker-447614-t6"
+project_id = "add_project_id"
 language_code = "en-AU"
+region = "region"
+endpoint_id = "endpoint"
+bucket_name = "bucketname"
+
+class PlayerData(BaseModel):
+    fullname: str
+    pitchHand: dict
+    batSide: dict
+    strikeZoneTop: dict
+    strikeZoneBottom: dict
+    height: dict
+    weight: dict
+    mlbDebutDate: dict
+    currentAge: dict
+    birthDate: dict
+
+# Initialize GCP AI Platform
+aiplatform.init(project=project_id, location=region)
+# Construct the endpoint resource name
+endpoint_name = f"projects/{project_id}/locations/{region}/endpoints/{endpoint_id}"
+# Initialize the endpoint
+endpoint = aiplatform.Endpoint(endpoint_name)
 
 # Input schema for API endpoints
 class CommentaryRequest(BaseModel):
@@ -25,7 +52,7 @@ class CommentaryRequest(BaseModel):
     commentary: str
     language_code : str
 
-class Playerdata(BaseModel):
+class IdRequest(BaseModel):
     team_id : int
     player_id: int
 
@@ -154,7 +181,78 @@ def set_tone_by_sentiment(player:str,sentiment_score: float, summary_text: str, 
     blob = bucket.blob(file_name)
     blob.upload_from_filename(local_file_path)
     blob.make_public()
-    return blob.public_url   
+    return blob.public_url
+
+def create_prompt(commentary: str) -> str:
+    """
+    Generate a descriptive prompt based on the live commentary.
+    """
+    return f"Create a realistic image of {commentary.lower()}."
+
+def upload_to_gcs(local_file_path: str, bucket_name: str, file_name: str) -> str:
+    """
+    Upload a file to Google Cloud Storage and return its public URL.
+    """
+    try:
+        # Initialize GCS client
+        gcs_client = storage.Client()
+        bucket = gcs_client.bucket(bucket_name)
+        blob = bucket.blob(file_name)
+
+        # Upload file to GCS
+        blob.upload_from_filename(local_file_path)
+        blob.make_public()
+        public_url = blob.public_url
+        print(f"File uploaded to GCS bucket '{bucket_name}' with public URL: {public_url}")
+        return public_url
+    except Exception as e:
+        print(f"Failed to upload file to GCS: {e}")
+        return ""
+
+def generate_image_from_commentary(commentary: str):
+    """
+    Generate an image from the live commentary and save it to Google Cloud Storage.
+    """
+    prompt = create_prompt(commentary)
+    instances = [
+        prompt
+    ]
+
+    try:
+        # Make the prediction request
+        response = endpoint.predict(instances=instances, parameters={
+            "guidance_scale": 0.1,
+            "negative_prompt": "cartoonish, unrealistic, overexposed, distorted faces, blurry, flat colors",
+            "num_inference_steps": 200,
+            "width": 768,
+            "height": 768,
+            "seed": 12345
+        })
+
+        # Parse the response
+        if response.predictions:
+            # Expecting the first prediction to be a base64-encoded string
+            generated_image = response.predictions[0] if isinstance(response.predictions[0], str) else None
+
+            if generated_image:
+                # Decode and save the image locally
+                image_data = base64.b64decode(generated_image)
+                image = Image.open(BytesIO(image_data))
+                local_file_path = "./gen_images/generated_image.png"
+                os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
+                image.save(local_file_path)
+                print(f"Image generated and saved locally as '{local_file_path}'.")
+
+                # Upload the image to GCS
+                file_name = "generated_images/generated_image.png"  # Path in GCS bucket
+                url_image = upload_to_gcs(local_file_path, bucket_name, file_name)
+                return url_image
+            else:
+                print("No valid image data found in response.")
+        else:
+            print("No predictions returned by the model.")
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 # API endpoint to process commentary
 @app.post("/process-commentary")
@@ -173,12 +271,13 @@ def process_commentary(request: CommentaryRequest) -> Dict:
 
         # Step 4: Generate audio
         audio = set_tone_by_sentiment(request.fav_player,sentiment_score, summary, request.language_code)
-
+        image_url = generate_image_from_commentary(request.commentary)
         return {
             "key_moment": key_moment.lower(),
             "sentiment_score": sentiment_score,
             "summary": summary,
             "audio": audio,  # Audio encoded in base64
+            "image":image_url
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -259,8 +358,46 @@ def get_player_data(id: int):
     except Exception as e:
         # Catch-all for other exceptions
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
-    
 
-@app.post("/player_image/")
-async def create_player_image(request: Playerdata):
-    pass
+@app.post("/generate_image/")
+def generate_image_from_commentary(player: PlayerData):
+    """
+    Generate an image from the live commentary and save it to Google Cloud Storage.
+    """
+    prompt = create_prompt(PlayerData)
+    instances = [
+        prompt
+    ]
+
+    try:
+        # Make the prediction request
+        response = endpoint.predict(instances=instances, parameters={
+            "guidance_scale": 0.1,
+            "negative_prompt": "cartoonish, unrealistic, overexposed, distorted faces, blurry, flat colors",
+            "num_inference_steps": 200,
+            "width": 768,
+            "height": 768,
+            "seed": 12345
+        })
+
+        # Parse the response
+        if response.predictions:
+            # Expecting the first prediction to be a base64-encoded string
+            generated_image = response.predictions[0] if isinstance(response.predictions[0], str) else None
+
+            if generated_image:
+                # Decode and save the image locally
+                image_data = base64.b64decode(generated_image)
+                image = Image.open(BytesIO(image_data))
+                local_file_path = "./gen_images/player_image.png"
+                os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
+                image.save(local_file_path)
+                print(f"Image generated and saved locally as '{local_file_path}'.")
+
+                return image
+            else:
+                print("No valid image data found in response.")
+        else:
+            print("No predictions returned by the model.")
+    except Exception as e:
+        print(f"An error occurred: {e}")
