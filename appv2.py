@@ -22,7 +22,7 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "google_creds.json"
 # Project ID and language configuration
 project_id = "add_project_id"
 language_code = "en-AU"
-region = "region"
+region = "asia-east1"
 endpoint_id = "endpoint"
 bucket_name = "bucketname"
 
@@ -400,7 +400,9 @@ def generate_image_from_commentary(player: PlayerData):
     """
     Generate an image from the live commentary and save it to Google Cloud Storage.
     """
-    prompt = create_prompt(PlayerData)
+    data = convert_player_data(PlayerData)
+
+    prompt = create_prompt(data)
     instances = [
         prompt
     ]
