@@ -26,17 +26,20 @@ region = "asia-east1"
 endpoint_id = "endpoint"
 bucket_name = "bucketname"
 
+# class PlayerData(BaseModel):
+#     fullname: str
+#     pitchHand: dict
+#     batSide: dict
+#     strikeZoneTop: dict
+#     strikeZoneBottom: dict
+#     height: dict
+#     weight: dict
+#     mlbDebutDate: dict
+#     currentAge: dict
+#     birthDate: dict
+
 class PlayerData(BaseModel):
-    fullname: str
-    pitchHand: dict
-    batSide: dict
-    strikeZoneTop: dict
-    strikeZoneBottom: dict
-    height: dict
-    weight: dict
-    mlbDebutDate: dict
-    currentAge: dict
-    birthDate: dict
+    playerdata : dict
 
 # Initialize GCP AI Platform
 aiplatform.init(project=project_id, location=region)
@@ -189,6 +192,19 @@ def create_prompt(commentary: str) -> str:
     """
     return f"Create a realistic image of {commentary.lower()}."
 
+
+def create_player_prompt(data):
+    """
+    Generate a descriptive prompt based on the live commentary.
+    """
+    res = f"""Create a realistic image of score card  with player name as {data.get("fullname", "")} with debut date as {data.get("mlbDebutDate", {})} whose height is {data.get("height", "")} 
+    and weight is {data.get("weight", "")} and age is {data.get("currentAge", "")} with batSide as {data.get("batSide", {})} , strikeZoneTop as {data.get("strikeZoneTop", {})} , strikeZoneBottom as {data.get("strikeZoneBottom", {})} and pitchHand as {data.get("pitchHand", {})}."""
+    print(res)
+
+    return f"""Create a realistic image of score card  with player name as {data.get("fullname", "")} with debut date as {data.get("mlbDebutDate", {})} whose height is {data.get("height", "")} 
+    and weight is {data.get("weight", "")} and age is {data.get("currentAge", "")}
+    with batSide as {data.get("batSide", {})} , strikeZoneTop as {data.get("strikeZoneTop", {})} , strikeZoneBottom as {data.get("strikeZoneBottom", {})} and pitchHand as {data.get("pitchHand", {})}  ."""
+
 def upload_to_gcs(local_file_path: str, bucket_name: str, file_name: str) -> str:
     """
     Upload a file to Google Cloud Storage and return its public URL.
@@ -257,36 +273,36 @@ def generate_image_from_commentary(commentary: str):
 
 from datetime import datetime
 
-def convert_player_data(player_data):
+def convert_player_data(PlayerData):
     # Convert player data to the required format
     converted_data = {
-        "fullname": player_data["player_data"]["fullname"],
+        "fullname": PlayerData["fullname"],
         "pitchHand": {
-            "type": player_data["player_data"]["pitchHand"]["description"]
+            "type": PlayerData["pitchHand"]["description"]
         },
         "batSide": {
-            "type": player_data["player_data"]["batSide"]["description"]
+            "type": PlayerData["batSide"]["description"]
         },
         "strikeZoneTop": {
-            "value": player_data["player_data"]["strikeZoneTop"]
+            "value": PlayerData["strikeZoneTop"]
         },
         "strikeZoneBottom": {
-            "value": player_data["player_data"]["strikeZoneBottom"]
+            "value": PlayerData["strikeZoneBottom"]
         },
         "height": {
-            "value": player_data["player_data"]["height"]
+            "value": PlayerData["height"]
         },
         "weight": {
-            "value": str(player_data["player_data"]["weight"]) + "lbs"  # Add lbs to weight
+            "value": str(PlayerData["weight"]) + "lbs"  # Add lbs to weight
         },
         "mlbDebutDate": {
-            "date": player_data["player_data"]["mlbDebutDate"]
+            "date": PlayerData["mlbDebutDate"]
         },
         "currentAge": {
-            "value": player_data["player_data"]["currentAge"]
+            "value": PlayerData["currentAge"]
         },
         "birthDate": {
-            "date": player_data["player_data"]["birthDate"]
+            "date": PlayerData["birthDate"]
         }
     }
     return converted_data
@@ -385,6 +401,11 @@ def get_player_data(id: int):
             "birthDate": player.get("birthDate", {})
         }
         # data = convert_player_data(PlayerData)
+        # data = convert_player_data(PlayerData)
+        # data = json.dumps(PlayerData)
+        # print(PlayerData)
+        # prompt = create_player_prompt(PlayerData)
+
         return {"player_data": PlayerData} 
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=f"Request error: {str(e)}")
@@ -395,14 +416,14 @@ def get_player_data(id: int):
         # Catch-all for other exceptions
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
-@app.post("/generate_image/")
-def generate_image_from_commentary(player: PlayerData):
+@app.post("/generate_image")
+def generate_image_from_commentary(request: PlayerData) -> Dict:
     """
     Generate an image from the live commentary and save it to Google Cloud Storage.
     """
-    data = convert_player_data(PlayerData)
-
-    prompt = create_prompt(data)
+    # data = convert_player_data(PlayerData)
+    # data = json.dumps(PlayerData)
+    prompt = create_player_prompt(PlayerData)
     instances = [
         prompt
     ]
