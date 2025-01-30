@@ -14,9 +14,34 @@ from google.cloud import storage
 import vertexai
 import requests
 import json
+from fastapi.middleware.cors import CORSMiddleware
 
-# FastAPI app instance
 app = FastAPI()
+
+origins = ['*']
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+# Define the file where user data will be stored
+USER_DATA_FILE = "users.json"
+
+# Ensure the file exists
+if not os.path.exists(USER_DATA_FILE):
+    with open(USER_DATA_FILE, "w") as file:
+        json.dump({}, file)
+
+class User(BaseModel):
+    username: str
+    password: str
+
+@app.get("/")
+def read_root():
+    return {"Error": "Please use the correct API endpoint"}
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "google_creds.json"
 # Project ID and language configuration
@@ -345,6 +370,33 @@ def get_team_data(team_id : int):
         return {"team_data": team_data}
     except:
         return {"error": "Invalid team ID"}
+
+
+def load_users():
+    """Load users from the JSON file."""
+    with open(USER_DATA_FILE, "r") as file:
+        return json.load(file)
+
+def save_users(users):
+    """Save users to the JSON file."""
+    with open(USER_DATA_FILE, "w") as file:
+        json.dump(users, file, indent=4)
+
+@app.post("/login")
+def login(user: User):
+    users = load_users()
+
+    if user.username in users:
+        if users[user.username] == user.password:
+            return {"message": f"Welcome back! {user.username}"}
+        else:
+            return {"message": f"Welcome {user.username}, but password updated!"}
+    
+    # If username is new, store it
+    users[user.username] = user.password
+    save_users(users)
+    return {"message": f"Welcome {user.username}"}
+
 
 @app.get("/team_players/{id}")
 def get_team_players(id: int):
