@@ -9,12 +9,13 @@ from google.cloud import aiplatform, storage
 import base64
 from PIL import Image
 from io import BytesIO
-import os
 from google.cloud import storage
 import vertexai
 import requests
 import json
 from fastapi.middleware.cors import CORSMiddleware
+import bcrypt
+from pydantic import BaseModel, EmailStr
 
 app = FastAPI()
 
@@ -27,13 +28,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# Define the file where user data will be stored
-USER_DATA_FILE = "users.json"
 
-# Ensure the file exists
-if not os.path.exists(USER_DATA_FILE):
-    with open(USER_DATA_FILE, "w") as file:
+USER_DB_FILE = "users.json"
+
+if not os.path.exists(USER_DB_FILE):
+    with open(USER_DB_FILE, "w") as file:
         json.dump({}, file)
+
+class RegisterUser(BaseModel):
+    phone: str
+    first_name: str
+    last_name: str
+    username: EmailStr
+    password: str
+    country: str
+
+
+class LoginUser(BaseModel):
+    username: EmailStr
+    password: str
 
 class User(BaseModel):
     username: str
@@ -373,29 +386,63 @@ def get_team_data(team_id : int):
 
 
 def load_users():
-    """Load users from the JSON file."""
-    with open(USER_DATA_FILE, "r") as file:
-        return json.load(file)
+    """Load users from a JSON file"""
+    try:
+        with open(USER_DB_FILE, "r") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
 
 def save_users(users):
-    """Save users to the JSON file."""
-    with open(USER_DATA_FILE, "w") as file:
-        json.dump(users, file, indent=4)
+    """Save users to a JSON file"""
+    with open(USER_DB_FILE, "w") as f:
+        json.dump(users, f, indent=4)
 
-@app.post("/login")
-def login(user: User):
+
+def hash_password(password: str) -> str:
+    """Hash a password using bcrypt"""
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password.encode(), salt).decode()
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a password against the stored hash"""
+    return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
+
+
+@app.post("/register")
+def register(user: RegisterUser):
     users = load_users()
 
     if user.username in users:
-        if users[user.username] == user.password:
-            return {"message": f"Welcome back! {user.username}"}
-        else:
-            return {"message": f"Welcome {user.username}, but password updated!"}
+        raise HTTPException(status_code=400, detail="User already exists. Please login.")
+
+    users[user.username] = {
+        "phone": user.phone,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "password": hash_password(user.password),
+        "country": user.country,
+    }
     
-    # If username is new, store it
-    users[user.username] = user.password
     save_users(users)
-    return {"message": f"Welcome {user.username}"}
+    return {"message": f"User {user.first_name} registered successfully!"}
+
+
+@app.post("/login")
+def login(user: LoginUser):
+    users = load_users()
+
+    if user.username not in users:
+        raise HTTPException(status_code=400, detail="User not found. Please register.")
+
+    stored_password = users[user.username]["password"]
+    
+    if verify_password(user.password, stored_password):
+        return {"message": f"Welcome back, {users[user.username]['first_name']}!"}
+    else:
+        raise HTTPException(status_code=401, detail="Invalid credentials. Please try again.")
 
 
 @app.get("/team_players/{id}")
