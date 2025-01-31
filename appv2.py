@@ -502,8 +502,47 @@ def get_player_data(id: int):
         # data = convert_player_data(PlayerData)
         # data = convert_player_data(PlayerData)
         # data = json.dumps(PlayerData)
-        # print(PlayerData)
-        # prompt = create_player_prompt(PlayerData)
+        print(PlayerData)
+        prompt = create_player_prompt(PlayerData)
+        instances = [
+            prompt
+        ]
+
+        try:
+            # Make the prediction request
+            response = endpoint.predict(instances=instances, parameters={
+                "guidance_scale": 0.1,
+                "negative_prompt": "cartoonish, unrealistic, overexposed, distorted faces, blurry, flat colors",
+                "num_inference_steps": 200,
+                "width": 768,
+                "height": 768,
+                "seed": 12345
+            })
+
+            # Parse the response
+            if response.predictions:
+                # Expecting the first prediction to be a base64-encoded string
+                generated_image = response.predictions[0] if isinstance(response.predictions[0], str) else None
+
+                if generated_image:
+                    # Decode and save the image locally
+                    image_data = base64.b64decode(generated_image)
+                    image = Image.open(BytesIO(image_data))
+                    local_file_path = "./gen_images/generated_image.png"
+                    os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
+                    image.save(local_file_path)
+                    print(f"Image generated and saved locally as '{local_file_path}'.")
+
+                    # Upload the image to GCS
+                    file_name = "generated_images/generated_image.png"  # Path in GCS bucket
+                    url_image = upload_to_gcs(local_file_path, bucket_name, file_name)
+                    print(url_image)
+                else:
+                    print("No valid image data found in response.")
+            else:
+                print("No predictions returned by the model.")
+        except Exception as e:
+            print(f"An error occurred: {e}")
 
         return {"player_data": PlayerData} 
     except requests.exceptions.RequestException as e:
@@ -516,7 +555,7 @@ def get_player_data(id: int):
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
 @app.post("/generate_image")
-def generate_image_from_commentary(request: PlayerData) -> Dict:
+def generate_image(request: PlayerData) -> Dict:
     """
     Generate an image from the live commentary and save it to Google Cloud Storage.
     """
