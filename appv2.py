@@ -595,21 +595,21 @@ def get_player_data(id: int):
         }
         # data = convert_player_data(PlayerData)
         # data = convert_player_data(PlayerData)
-        # data = json.dumps(PlayerData)
+        data = json.dumps(PlayerData)
         print(PlayerData)
         try:
             prompt = f"""Generate a highly realistic and detailed image of a baseball scorecard displaying player statistics.
 
             The scorecard should clearly showcase the following information:
 
-            * **Player Name**: {data.get("fullname", "")}
-            * **Debut Date**: {data.get("mlbDebutDate", "")}
-            * **Height**: {data.get("height", "")}
-            * **Weight**: {data.get("weight", "")}
-            * **Age**: {data.get("currentAge", "")}
-            * **Batting Side**: {data.get("batSide", "")}
-            * **Strike Zone**: Top - {data.get("strikeZoneTop", "")}, Bottom - {data.get("strikeZoneBottom", "")}
-            * **Pitching Hand**: {data.get("pitchHand", "")}
+            * **Player Name**: {PlayerData.get("fullname", "")}
+            * **Debut Date**: {PlayerData.get("mlbDebutDate", "")}
+            * **Height**: {PlayerData.get("height", "")}
+            * **Weight**: {PlayerData.get("weight", "")}
+            * **Age**: {PlayerData.get("currentAge", "")}
+            * **Batting Side**: {PlayerData.get("batSide", "")}
+            * **Strike Zone**: Top - {PlayerData.get("strikeZoneTop", "")}, Bottom - {PlayerData.get("strikeZoneBottom", "")}
+            * **Pitching Hand**: {PlayerData.get("pitchHand", "")}
 
             The scorecard should have a professional, clean, and realistic design, resembling an official baseball stat sheet.  It should be placed on a visually appealing background, such as a wooden table, a baseball dugout, or a scoreboard, to add depth to the scene.  The overall image should evoke the atmosphere of a professional baseball game.
 
